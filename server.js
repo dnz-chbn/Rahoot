@@ -1,37 +1,15 @@
 const http = require("http")
-const path = require("path")
 const { createSocketServer } = require("./packages/socket/dist/setup.cjs")
 
-const nextDir = path.join(__dirname, "packages", "web")
+const originalListen = http.Server.prototype.listen
 
-process.env.NODE_ENV = "production"
+http.Server.prototype.listen = function (...args) {
+  http.Server.prototype.listen = originalListen
 
-const NextServer =
-  require("next/dist/server/next-server").default
+  createSocketServer(this, process.env.WEB_ORIGIN || "*")
+  console.log("Socket.IO attached to Next.js server")
 
-const serverConfig = require(
-  path.join(nextDir, ".next", "required-server-files.json"),
-)
+  return originalListen.apply(this, args)
+}
 
-const nextServer = new NextServer({
-  hostname: "0.0.0.0",
-  port: parseInt(process.env.PORT || "3000"),
-  dir: nextDir,
-  dev: false,
-  customServer: true,
-  conf: serverConfig.config,
-})
-
-const nextHandler = nextServer.getRequestHandler()
-
-const httpServer = http.createServer((req, res) => {
-  nextHandler(req, res)
-})
-
-createSocketServer(httpServer, process.env.WEB_ORIGIN || "*")
-
-const port = parseInt(process.env.PORT || "3000")
-
-httpServer.listen(port, "0.0.0.0", () => {
-  console.log(`Rahoot running on port ${port}`)
-})
+require("./packages/web/server.js")
