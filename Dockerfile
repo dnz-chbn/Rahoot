@@ -32,7 +32,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm build
 
-# Build socket server if needed (TypeScript or similar)
+# Build socket server
 WORKDIR /app/packages/socket
 RUN if [ -f "tsconfig.json" ]; then pnpm build; fi
 
@@ -44,13 +44,6 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
-
-# Enable pnpm in the runtime image
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Copy configuration files
-COPY pnpm-workspace.yaml package.json ./
-
 # Copy the Next.js standalone build
 COPY --from=builder /app/packages/web/.next/standalone ./
 COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
@@ -59,15 +52,19 @@ COPY --from=builder /app/packages/web/public ./packages/web/public
 # Copy the socket server build
 COPY --from=builder /app/packages/socket/dist ./packages/socket/dist
 
+# Copy the combined server
+COPY --from=builder /app/server.js ./server.js
+
 # Copy the game default config
 COPY --from=builder /app/config ./config
 
-# Expose the web and socket ports
-EXPOSE 3000 5505
+# Expose single port
+EXPOSE 3000
 
 # Environment variables
 ENV NODE_ENV=production
 ENV CONFIG_PATH=/app/config
+ENV PORT=3000
 
-# Start both services (Next.js web app + Socket server)
-CMD ["sh", "-c", "node packages/web/server.js & node packages/socket/dist/index.cjs"]
+# Start the combined server
+CMD ["node", "server.js"]

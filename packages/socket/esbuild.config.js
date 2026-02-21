@@ -1,12 +1,10 @@
 import esbuild from "esbuild"
 import path from "path"
 
-export const config = {
-  entryPoints: ["src/index.ts"],
+const shared = {
   bundle: true,
   minify: true,
   platform: "node",
-  outfile: "dist/index.cjs",
   sourcemap: true,
   define: {
     "process.env.NODE_ENV": '"production"',
@@ -16,4 +14,14 @@ export const config = {
   },
 }
 
-esbuild.build(config)
+esbuild.build({
+  ...shared,
+  entryPoints: ["src/index.ts"],
+  outfile: "dist/index.cjs",
+})
+
+esbuild.build({
+  ...shared,
+  entryPoints: ["src/setup.ts"],
+  outfile: "dist/setup.cjs",
+})
