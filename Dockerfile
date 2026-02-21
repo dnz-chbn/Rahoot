@@ -65,6 +65,7 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV CONFIG_PATH=/app/config
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 # Start the combined server
 CMD ["node", "server.js"]
