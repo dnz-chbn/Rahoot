@@ -1,4 +1,4 @@
-import { QuizzWithId } from "@rahoot/common/types/game"
+import { Quizz, QuizzWithId } from "@rahoot/common/types/game"
 import fs from "fs"
 import { resolve } from "path"
 
@@ -8,6 +8,12 @@ const getPath = (path: string = "") =>
   inContainerPath
     ? resolve(inContainerPath, path)
     : resolve(process.cwd(), "../../config", path)
+
+const toSlug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
 
 class Config {
   static init() {
@@ -124,6 +130,68 @@ class Config {
 
       return []
     }
+  }
+
+  static getQuizz(id: string): QuizzWithId | null {
+    const filePath = getPath(`quizz/${id}.json`)
+
+    if (!fs.existsSync(filePath)) {
+      return null
+    }
+
+    try {
+      const data = fs.readFileSync(filePath, "utf-8")
+
+      return { id, ...JSON.parse(data) }
+    } catch {
+      return null
+    }
+  }
+
+  static createQuizz(quizz: Quizz): QuizzWithId {
+    let id = toSlug(quizz.subject)
+
+    if (!id) {
+      id = `quizz-${Date.now()}`
+    }
+
+    let filePath = getPath(`quizz/${id}.json`)
+    let suffix = 1
+
+    while (fs.existsSync(filePath)) {
+      id = `${toSlug(quizz.subject)}-${suffix++}`
+      filePath = getPath(`quizz/${id}.json`)
+    }
+
+    const { subject, questions } = quizz
+    fs.writeFileSync(filePath, JSON.stringify({ subject, questions }, null, 2))
+
+    return { id, subject, questions }
+  }
+
+  static updateQuizz(id: string, quizz: Quizz): QuizzWithId | null {
+    const filePath = getPath(`quizz/${id}.json`)
+
+    if (!fs.existsSync(filePath)) {
+      return null
+    }
+
+    const { subject, questions } = quizz
+    fs.writeFileSync(filePath, JSON.stringify({ subject, questions }, null, 2))
+
+    return { id, subject, questions }
+  }
+
+  static deleteQuizz(id: string): boolean {
+    const filePath = getPath(`quizz/${id}.json`)
+
+    if (!fs.existsSync(filePath)) {
+      return false
+    }
+
+    fs.unlinkSync(filePath)
+
+    return true
   }
 }
 

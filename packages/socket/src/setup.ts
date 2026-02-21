@@ -1,5 +1,6 @@
 import { Server } from "@rahoot/common/types/game/socket"
 import { inviteCodeValidator } from "@rahoot/common/validators/auth"
+import { quizzSchema } from "@rahoot/common/validators/quizz"
 import Config from "@rahoot/socket/services/config"
 import Game from "@rahoot/socket/services/game"
 import Registry from "@rahoot/socket/services/registry"
@@ -75,6 +76,84 @@ export function setupSocketHandlers(io: Server) {
       } catch (error) {
         console.error("Failed to read game config:", error)
         socket.emit("manager:errorMessage", "Failed to read game config")
+      }
+    })
+
+    socket.on("manager:createQuizz", (quizz) => {
+      try {
+        const result = quizzSchema.safeParse(quizz)
+
+        if (!result.success) {
+          socket.emit("manager:errorMessage", result.error.issues[0].message)
+
+          return
+        }
+
+        const created = Config.createQuizz(result.data)
+        socket.emit("manager:quizzCreated", created)
+      } catch (error) {
+        console.error("Failed to create quizz:", error)
+        socket.emit("manager:errorMessage", "Failed to create quizz")
+      }
+    })
+
+    socket.on("manager:updateQuizz", ({ id, quizz }) => {
+      try {
+        const result = quizzSchema.safeParse(quizz)
+
+        if (!result.success) {
+          socket.emit("manager:errorMessage", result.error.issues[0].message)
+
+          return
+        }
+
+        const updated = Config.updateQuizz(id, result.data)
+
+        if (!updated) {
+          socket.emit("manager:errorMessage", "Quizz not found")
+
+          return
+        }
+
+        socket.emit("manager:quizzUpdated", updated)
+      } catch (error) {
+        console.error("Failed to update quizz:", error)
+        socket.emit("manager:errorMessage", "Failed to update quizz")
+      }
+    })
+
+    socket.on("manager:deleteQuizz", (id) => {
+      try {
+        const deleted = Config.deleteQuizz(id)
+
+        if (!deleted) {
+          socket.emit("manager:errorMessage", "Quizz not found")
+
+          return
+        }
+
+        socket.emit("manager:quizzDeleted", id)
+      } catch (error) {
+        console.error("Failed to delete quizz:", error)
+        socket.emit("manager:errorMessage", "Failed to delete quizz")
+      }
+    })
+
+    socket.on("manager:importQuizz", (json) => {
+      try {
+        const parsed = JSON.parse(json)
+        const result = quizzSchema.safeParse(parsed)
+
+        if (!result.success) {
+          socket.emit("manager:errorMessage", result.error.issues[0].message)
+
+          return
+        }
+
+        const created = Config.createQuizz(result.data)
+        socket.emit("manager:quizzCreated", created)
+      } catch {
+        socket.emit("manager:errorMessage", "Invalid JSON format")
       }
     })
 

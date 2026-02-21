@@ -1,5 +1,5 @@
 import { Server as ServerIO, Socket as SocketIO } from "socket.io"
-import { GameUpdateQuestion, Player, QuizzWithId } from "."
+import { GameUpdateQuestion, Player, Quizz, QuizzWithId } from "."
 import { Status, StatusDataMap } from "./status"
 
 export type Server = ServerIO<ClientToServerEvents, ServerToClientEvents>
@@ -61,6 +61,11 @@ export interface ServerToClientEvents {
   "manager:removePlayer": (_playerId: string) => void
   "manager:errorMessage": (_message: string) => void
   "manager:playerKicked": (_playerId: string) => void
+
+  // Quiz CRUD events
+  "manager:quizzCreated": (_quizz: QuizzWithId) => void
+  "manager:quizzUpdated": (_quizz: QuizzWithId) => void
+  "manager:quizzDeleted": (_id: string) => void
 }
 
 export interface ClientToServerEvents {
@@ -81,6 +86,12 @@ export interface ClientToServerEvents {
   "player:selectedAnswer": (
     _message: MessageWithoutStatus<{ answerKey: number }>
   ) => void
+
+  // Quiz CRUD actions
+  "manager:createQuizz": (_quizz: Quizz) => void
+  "manager:updateQuizz": (_data: { id: string; quizz: Quizz }) => void
+  "manager:deleteQuizz": (_id: string) => void
+  "manager:importQuizz": (_json: string) => void
 
   // Common
   disconnect: () => void
