@@ -4,6 +4,23 @@ import Config from "@rahoot/socket/services/config"
 import Game from "@rahoot/socket/services/game"
 import Registry from "@rahoot/socket/services/registry"
 import { withGame } from "@rahoot/socket/utils/game"
+import { Server as ServerIO } from "socket.io"
+import type { Server as HttpServer } from "http"
+
+export function createSocketServer(
+  httpServer: HttpServer,
+  webOrigin: string,
+): Server {
+  const io: Server = new ServerIO(httpServer, {
+    cors: {
+      origin: webOrigin || "*",
+    },
+  })
+
+  setupSocketHandlers(io)
+
+  return io
+}
 
 export function setupSocketHandlers(io: Server) {
   Config.init()

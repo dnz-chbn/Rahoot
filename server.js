@@ -1,7 +1,6 @@
 const http = require("http")
 const path = require("path")
-const { Server: SocketIO } = require("socket.io")
-const { setupSocketHandlers } = require("./packages/socket/dist/setup.cjs")
+const { createSocketServer } = require("./packages/socket/dist/setup.cjs")
 
 const nextDir = path.join(__dirname, "packages", "web")
 
@@ -29,13 +28,7 @@ const httpServer = http.createServer((req, res) => {
   nextHandler(req, res)
 })
 
-const io = new SocketIO(httpServer, {
-  cors: {
-    origin: process.env.WEB_ORIGIN || "*",
-  },
-})
-
-setupSocketHandlers(io)
+createSocketServer(httpServer, process.env.WEB_ORIGIN || "*")
 
 const port = parseInt(process.env.PORT || "3000")
 
