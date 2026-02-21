@@ -1,6 +1,9 @@
 import { Quizz, QuizzWithId } from "@rahoot/common/types/game"
 import fs from "fs"
 import { resolve } from "path"
+import db from "@rahoot/socket/services/firestore"
+
+const COLLECTION = "quizzes"
 
 const inContainerPath = process.env.CONFIG_PATH
 
@@ -16,7 +19,7 @@ const toSlug = (text: string) =>
     .replace(/^-|-$/g, "")
 
 class Config {
-  static init() {
+  static async init() {
     const isConfigFolderExists = fs.existsSync(getPath())
 
     if (!isConfigFolderExists) {
@@ -39,46 +42,45 @@ class Config {
       )
     }
 
-    const isQuizzExists = fs.existsSync(getPath("quizz"))
+    if (db) {
+      await Config.seedFromFiles()
+    }
+  }
 
-    if (!isQuizzExists) {
-      fs.mkdirSync(getPath("quizz"))
+  private static async seedFromFiles() {
+    if (!db) {
+      return
+    }
 
-      fs.writeFileSync(
-        getPath("quizz/example.json"),
-        JSON.stringify(
-          {
-            subject: "Example Quizz",
-            questions: [
-              {
-                question: "What is good answer ?",
-                answers: ["No", "Good answer", "No", "No"],
-                solution: 1,
-                cooldown: 5,
-                time: 15,
-              },
-              {
-                question: "What is good answer with image ?",
-                answers: ["No", "No", "No", "Good answer"],
-                image: "https://placehold.co/600x400.png",
-                solution: 3,
-                cooldown: 5,
-                time: 20,
-              },
-              {
-                question: "What is good answer with two answers ?",
-                answers: ["Good answer", "No"],
-                image: "https://placehold.co/600x400.png",
-                solution: 0,
-                cooldown: 5,
-                time: 20,
-              },
-            ],
-          },
-          null,
-          2
-        )
-      )
+    const snapshot = await db.collection(COLLECTION).limit(1).get()
+
+    if (!snapshot.empty) {
+      return
+    }
+
+    const quizzDir = getPath("quizz")
+
+    if (!fs.existsSync(quizzDir)) {
+      return
+    }
+
+    const files = fs
+      .readdirSync(quizzDir)
+      .filter((file) => file.endsWith(".json"))
+
+    for (const file of files) {
+      const data = fs.readFileSync(resolve(quizzDir, file), "utf-8")
+      const quizz = JSON.parse(data)
+      const id = file.replace(".json", "")
+
+      await db.collection(COLLECTION).doc(id).set({
+        subject: quizz.subject,
+        questions: quizz.questions,
+      })
+    }
+
+    if (files.length > 0) {
+      console.log(`Seeded ${files.length} quizzes into Firestore`)
     }
   }
 
@@ -100,96 +102,102 @@ class Config {
     return {}
   }
 
-  static quizz() {
-    const isExists = fs.existsSync(getPath("quizz"))
-
-    if (!isExists) {
-      return []
+  static async quizz(): Promise<QuizzWithId[]> {
+    if (!db) {
+      throw new Error("Firestore not initialized")
     }
 
     try {
-      const files = fs
-        .readdirSync(getPath("quizz"))
-        .filter((file) => file.endsWith(".json"))
+      const snapshot = await db.collection(COLLECTION).get()
 
-      const quizz: QuizzWithId[] = files.map((file) => {
-        const data = fs.readFileSync(getPath(`quizz/${file}`), "utf-8")
-        const config = JSON.parse(data)
-
-        const id = file.replace(".json", "")
-
-        return {
-          id,
-          ...config,
-        }
-      })
-
-      return quizz || []
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Quizz),
+      }))
     } catch (error) {
-      console.error("Failed to read quizz config:", error)
+      console.error("Failed to read quizzes:", error)
 
       return []
     }
   }
 
-  static getQuizz(id: string): QuizzWithId | null {
-    const filePath = getPath(`quizz/${id}.json`)
-
-    if (!fs.existsSync(filePath)) {
+  static async getQuizz(id: string): Promise<QuizzWithId | null> {
+    if (!db) {
       return null
     }
 
     try {
-      const data = fs.readFileSync(filePath, "utf-8")
+      const doc = await db.collection(COLLECTION).doc(id).get()
 
-      return { id, ...JSON.parse(data) }
+      if (!doc.exists) {
+        return null
+      }
+
+      return { id: doc.id, ...(doc.data() as Quizz) }
     } catch {
       return null
     }
   }
 
-  static createQuizz(quizz: Quizz): QuizzWithId {
-    let id = toSlug(quizz.subject)
-
-    if (!id) {
-      id = `quizz-${Date.now()}`
+  static async createQuizz(quizz: Quizz): Promise<QuizzWithId> {
+    if (!db) {
+      throw new Error("Firestore not initialized")
     }
 
-    let filePath = getPath(`quizz/${id}.json`)
-    let suffix = 1
+    let id = toSlug(quizz.subject) || `quizz-${Date.now()}`
 
-    while (fs.existsSync(filePath)) {
-      id = `${toSlug(quizz.subject)}-${suffix++}`
-      filePath = getPath(`quizz/${id}.json`)
+    const existing = await db.collection(COLLECTION).doc(id).get()
+
+    if (existing.exists) {
+      let suffix = 1
+
+      while (
+        (await db.collection(COLLECTION).doc(`${id}-${suffix}`).get()).exists
+      ) {
+        suffix++
+      }
+
+      id = `${id}-${suffix}`
     }
 
     const { subject, questions } = quizz
-    fs.writeFileSync(filePath, JSON.stringify({ subject, questions }, null, 2))
+    await db.collection(COLLECTION).doc(id).set({ subject, questions })
 
     return { id, subject, questions }
   }
 
-  static updateQuizz(id: string, quizz: Quizz): QuizzWithId | null {
-    const filePath = getPath(`quizz/${id}.json`)
+  static async updateQuizz(
+    id: string,
+    quizz: Quizz,
+  ): Promise<QuizzWithId | null> {
+    if (!db) {
+      throw new Error("Firestore not initialized")
+    }
 
-    if (!fs.existsSync(filePath)) {
+    const doc = await db.collection(COLLECTION).doc(id).get()
+
+    if (!doc.exists) {
       return null
     }
 
     const { subject, questions } = quizz
-    fs.writeFileSync(filePath, JSON.stringify({ subject, questions }, null, 2))
+    await db.collection(COLLECTION).doc(id).set({ subject, questions })
 
     return { id, subject, questions }
   }
 
-  static deleteQuizz(id: string): boolean {
-    const filePath = getPath(`quizz/${id}.json`)
+  static async deleteQuizz(id: string): Promise<boolean> {
+    if (!db) {
+      throw new Error("Firestore not initialized")
+    }
 
-    if (!fs.existsSync(filePath)) {
+    const doc = await db.collection(COLLECTION).doc(id).get()
+
+    if (!doc.exists) {
       return false
     }
 
-    fs.unlinkSync(filePath)
+    await db.collection(COLLECTION).doc(id).delete()
 
     return true
   }

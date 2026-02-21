@@ -9,8 +9,8 @@ const io: Server = new ServerIO({
   },
 })
 
-setupSocketHandlers(io)
-
-const port = env.SOCKER_PORT
-console.log(`Socket server running on port ${port}`)
-io.listen(Number(port))
+setupSocketHandlers(io).then(() => {
+  const port = env.SOCKER_PORT
+  console.log(`Socket server running on port ${port}`)
+  io.listen(Number(port))
+})

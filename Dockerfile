@@ -52,6 +52,9 @@ COPY --from=builder /app/packages/web/public ./packages/web/public
 # Copy the socket server build
 COPY --from=builder /app/packages/socket/dist ./packages/socket/dist
 
+# Install firebase-admin for runtime (marked as external in esbuild)
+RUN npm install --no-save firebase-admin
+
 # Copy the combined server
 COPY --from=builder /app/server.js ./server.js
 

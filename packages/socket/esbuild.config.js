@@ -12,6 +12,7 @@ const shared = {
   alias: {
     "@": path.resolve("./src"),
   },
+  external: ["firebase-admin"],
 }
 
 esbuild.build({

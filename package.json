@@ -1,7 +1,7 @@
 {
   "name": "rahoot",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "unrs-resolver"]
+    "onlyBuiltDependencies": ["esbuild", "sharp", "unrs-resolver", "protobufjs"]
   },
   "scripts": {
     "dev": "dotenv -e .env -- pnpm -r --parallel dev",

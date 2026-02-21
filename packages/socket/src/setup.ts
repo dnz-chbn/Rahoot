@@ -23,8 +23,8 @@ export function createSocketServer(
   return io
 }
 
-export function setupSocketHandlers(io: Server) {
-  Config.init()
+export async function setupSocketHandlers(io: Server) {
+  await Config.init()
   const registry = Registry.getInstance()
 
   io.on("connection", (socket) => {
@@ -62,7 +62,7 @@ export function setupSocketHandlers(io: Server) {
       socket.emit("game:reset", "Game expired")
     })
 
-    socket.on("manager:auth", (password) => {
+    socket.on("manager:auth", async (password) => {
       try {
         const config = Config.game()
 
@@ -72,14 +72,15 @@ export function setupSocketHandlers(io: Server) {
           return
         }
 
-        socket.emit("manager:quizzList", Config.quizz())
+        const quizzList = await Config.quizz()
+        socket.emit("manager:quizzList", quizzList)
       } catch (error) {
         console.error("Failed to read game config:", error)
         socket.emit("manager:errorMessage", "Failed to read game config")
       }
     })
 
-    socket.on("manager:createQuizz", (quizz) => {
+    socket.on("manager:createQuizz", async (quizz) => {
       try {
         const result = quizzSchema.safeParse(quizz)
 
@@ -89,7 +90,7 @@ export function setupSocketHandlers(io: Server) {
           return
         }
 
-        const created = Config.createQuizz(result.data)
+        const created = await Config.createQuizz(result.data)
         socket.emit("manager:quizzCreated", created)
       } catch (error) {
         console.error("Failed to create quizz:", error)
@@ -97,7 +98,7 @@ export function setupSocketHandlers(io: Server) {
       }
     })
 
-    socket.on("manager:updateQuizz", ({ id, quizz }) => {
+    socket.on("manager:updateQuizz", async ({ id, quizz }) => {
       try {
         const result = quizzSchema.safeParse(quizz)
 
@@ -107,7 +108,7 @@ export function setupSocketHandlers(io: Server) {
           return
         }
 
-        const updated = Config.updateQuizz(id, result.data)
+        const updated = await Config.updateQuizz(id, result.data)
 
         if (!updated) {
           socket.emit("manager:errorMessage", "Quizz not found")
@@ -122,9 +123,9 @@ export function setupSocketHandlers(io: Server) {
       }
     })
 
-    socket.on("manager:deleteQuizz", (id) => {
+    socket.on("manager:deleteQuizz", async (id) => {
       try {
-        const deleted = Config.deleteQuizz(id)
+        const deleted = await Config.deleteQuizz(id)
 
         if (!deleted) {
           socket.emit("manager:errorMessage", "Quizz not found")
@@ -139,7 +140,7 @@ export function setupSocketHandlers(io: Server) {
       }
     })
 
-    socket.on("manager:importQuizz", (json) => {
+    socket.on("manager:importQuizz", async (json) => {
       try {
         const parsed = JSON.parse(json)
         const result = quizzSchema.safeParse(parsed)
@@ -150,15 +151,15 @@ export function setupSocketHandlers(io: Server) {
           return
         }
 
-        const created = Config.createQuizz(result.data)
+        const created = await Config.createQuizz(result.data)
         socket.emit("manager:quizzCreated", created)
       } catch {
         socket.emit("manager:errorMessage", "Invalid JSON format")
       }
     })
 
-    socket.on("game:create", (quizzId) => {
-      const quizzList = Config.quizz()
+    socket.on("game:create", async (quizzId) => {
+      const quizzList = await Config.quizz()
       const quizz = quizzList.find((q) => q.id === quizzId)
 
       if (!quizz) {
