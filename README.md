@@ -11,7 +11,10 @@
 
 Rahoot is a straightforward and open-source clone of the Kahoot! platform, allowing users to host it on their own server for smaller events.
 
-> ⚠️ This project is still under development, please report any bugs or suggestions in the [issues](https://github.com/Ralex91/Rahoot/issues)
+> ⚠️ This is a fork of [Ralex91/Rahoot](https://github.com/Ralex91/Rahoot) with the following additions:
+> - **Single-port deployment** — web and WebSocket run on a single port, enabling cloud platforms like Render
+> - **Optional Firebase Firestore persistence** — quizzes can be stored in Firestore instead of local JSON files
+> - **Online quiz management UI** — create, edit, delete, reorder, and import quizzes from the manager interface
 
 <p align="center">
   <img width="30%" src="https://raw.githubusercontent.com/Ralex91/Rahoot/main/.github/preview1.jpg" alt="Login">
@@ -72,6 +75,8 @@ The application will be available at:
 - Web Interface: http://localhost:3000
 - WebSocket Server: ws://localhost:3001
 
+> **Note:** In this fork, web and WebSocket run on a single port by default in Docker. You only need to expose port 3000. This also makes it compatible with cloud platforms (e.g. Render) that only allow one port.
+
 ### 🛠️ Without Docker
 
 1. Clone the repository:
@@ -120,7 +125,29 @@ Options:
 - `managerPassword`: The master password for accessing the manager interface
 - `music`: Enable/disable game music
 
-### 2. Quiz Configuration (`config/quizz/*.json`)
+### 2. Firebase Firestore (Optional)
+
+To persist quizzes in Firestore instead of local files, set the `FIREBASE_SERVICE_ACCOUNT` environment variable with your Firebase service account JSON:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT='{"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}'
+```
+
+On first run, quizzes from `config/quizz/*.json` are automatically seeded into Firestore. After that, all quiz operations (create, edit, delete) go through Firestore. If the variable is not set, the app falls back to file-based storage — no Firebase account required.
+
+### 3. Online Quiz Management
+
+Once logged in as a manager, you can manage quizzes directly from the UI:
+
+- **Create** new quizzes
+- **Edit** existing questions, answers, and settings
+- **Delete** quizzes
+- **Reorder** questions
+- **Import** quizzes from JSON
+
+This removes the need to manually edit JSON files on the server.
+
+### 4. Quiz Configuration (`config/quizz/*.json`)
 
 Create your quiz files in the `config/quizz/` directory. You can have multiple quiz files and select which one to use when starting a game.
 
