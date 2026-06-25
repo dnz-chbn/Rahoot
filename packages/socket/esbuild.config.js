@@ -12,7 +12,7 @@ const shared = {
   alias: {
     "@": path.resolve("./src"),
   },
-  external: ["firebase-admin"],
+  external: ["node:sqlite"],
 }
 
 esbuild.build({

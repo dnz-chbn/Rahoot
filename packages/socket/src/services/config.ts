@@ -1,9 +1,7 @@
 import { Quizz, QuizzWithId } from "@rahoot/common/types/game"
 import fs from "fs"
 import { resolve } from "path"
-import db from "@rahoot/socket/services/firestore"
-
-const COLLECTION = "quizzes"
+import db from "@rahoot/socket/services/database"
 
 const inContainerPath = process.env.CONFIG_PATH
 
@@ -18,12 +16,23 @@ const toSlug = (text: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
 
+type QuizzRow = { id: string; subject: string; questions: string }
+
+const rowToQuizz = (row: QuizzRow): QuizzWithId => ({
+  id: row.id,
+  subject: row.subject,
+  questions: JSON.parse(row.questions),
+})
+
+const exists = (id: string): boolean =>
+  db.prepare("SELECT 1 FROM quizzes WHERE id = ?").get(id) !== undefined
+
 class Config {
   static async init() {
     const isConfigFolderExists = fs.existsSync(getPath())
 
     if (!isConfigFolderExists) {
-      fs.mkdirSync(getPath())
+      fs.mkdirSync(getPath(), { recursive: true })
     }
 
     const isGameConfigExists = fs.existsSync(getPath("game.json"))
@@ -42,19 +51,15 @@ class Config {
       )
     }
 
-    if (db) {
-      await Config.seedFromFiles()
-    }
+    Config.seedFromFiles()
   }
 
-  private static async seedFromFiles() {
-    if (!db) {
-      return
+  private static seedFromFiles() {
+    const { n } = db.prepare("SELECT COUNT(*) AS n FROM quizzes").get() as {
+      n: number
     }
 
-    const snapshot = await db.collection(COLLECTION).limit(1).get()
-
-    if (!snapshot.empty) {
+    if (n > 0) {
       return
     }
 
@@ -68,19 +73,20 @@ class Config {
       .readdirSync(quizzDir)
       .filter((file) => file.endsWith(".json"))
 
+    const insert = db.prepare(
+      "INSERT OR REPLACE INTO quizzes (id, subject, questions) VALUES (?, ?, ?)"
+    )
+
     for (const file of files) {
       const data = fs.readFileSync(resolve(quizzDir, file), "utf-8")
       const quizz = JSON.parse(data)
       const id = file.replace(".json", "")
 
-      await db.collection(COLLECTION).doc(id).set({
-        subject: quizz.subject,
-        questions: quizz.questions,
-      })
+      insert.run(id, quizz.subject, JSON.stringify(quizz.questions))
     }
 
     if (files.length > 0) {
-      console.log(`Seeded ${files.length} quizzes into Firestore`)
+      console.log(`Seeded ${files.length} quizzes into SQLite`)
     }
   }
 
@@ -103,17 +109,12 @@ class Config {
   }
 
   static async quizz(): Promise<QuizzWithId[]> {
-    if (!db) {
-      throw new Error("Firestore not initialized")
-    }
-
     try {
-      const snapshot = await db.collection(COLLECTION).get()
+      const rows = db
+        .prepare("SELECT id, subject, questions FROM quizzes")
+        .all() as QuizzRow[]
 
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Quizz),
-      }))
+      return rows.map(rowToQuizz)
     } catch (error) {
       console.error("Failed to read quizzes:", error)
 
@@ -122,38 +123,24 @@ class Config {
   }
 
   static async getQuizz(id: string): Promise<QuizzWithId | null> {
-    if (!db) {
-      return null
-    }
-
     try {
-      const doc = await db.collection(COLLECTION).doc(id).get()
+      const row = db
+        .prepare("SELECT id, subject, questions FROM quizzes WHERE id = ?")
+        .get(id) as QuizzRow | undefined
 
-      if (!doc.exists) {
-        return null
-      }
-
-      return { id: doc.id, ...(doc.data() as Quizz) }
+      return row ? rowToQuizz(row) : null
     } catch {
       return null
     }
   }
 
   static async createQuizz(quizz: Quizz): Promise<QuizzWithId> {
-    if (!db) {
-      throw new Error("Firestore not initialized")
-    }
-
     let id = toSlug(quizz.subject) || `quizz-${Date.now()}`
 
-    const existing = await db.collection(COLLECTION).doc(id).get()
-
-    if (existing.exists) {
+    if (exists(id)) {
       let suffix = 1
 
-      while (
-        (await db.collection(COLLECTION).doc(`${id}-${suffix}`).get()).exists
-      ) {
+      while (exists(`${id}-${suffix}`)) {
         suffix++
       }
 
@@ -161,7 +148,10 @@ class Config {
     }
 
     const { subject, questions } = quizz
-    await db.collection(COLLECTION).doc(id).set({ subject, questions })
+
+    db.prepare(
+      "INSERT INTO quizzes (id, subject, questions) VALUES (?, ?, ?)"
+    ).run(id, subject, JSON.stringify(questions))
 
     return { id, subject, questions }
   }
@@ -170,36 +160,23 @@ class Config {
     id: string,
     quizz: Quizz,
   ): Promise<QuizzWithId | null> {
-    if (!db) {
-      throw new Error("Firestore not initialized")
-    }
-
-    const doc = await db.collection(COLLECTION).doc(id).get()
-
-    if (!doc.exists) {
+    if (!exists(id)) {
       return null
     }
 
     const { subject, questions } = quizz
-    await db.collection(COLLECTION).doc(id).set({ subject, questions })
+
+    db.prepare(
+      "UPDATE quizzes SET subject = ?, questions = ? WHERE id = ?"
+    ).run(subject, JSON.stringify(questions), id)
 
     return { id, subject, questions }
   }
 
   static async deleteQuizz(id: string): Promise<boolean> {
-    if (!db) {
-      throw new Error("Firestore not initialized")
-    }
+    const result = db.prepare("DELETE FROM quizzes WHERE id = ?").run(id)
 
-    const doc = await db.collection(COLLECTION).doc(id).get()
-
-    if (!doc.exists) {
-      return false
-    }
-
-    await db.collection(COLLECTION).doc(id).delete()
-
-    return true
+    return result.changes > 0
   }
 }
 

@@ -1,11 +1,19 @@
-version: "3.8"
+name: rahoot
 
 services:
   rahoot:
-    image: ralex91/rahoot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rahoot:local
+    container_name: rahoot
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    volumes:
-      - ./config:/app/config # Path to your game config
     environment:
       - WEB_ORIGIN=http://localhost:3000
+      - CONFIG_PATH=/app/config
+      - DATA_PATH=/app/data
+    volumes:
+      - ./config:/app/config # quiz seed files + game.json
+      - ./data:/app/data # SQLite database (rahoot.db)
