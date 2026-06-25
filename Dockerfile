@@ -49,17 +49,18 @@ COPY --from=builder /app/packages/web/.next/standalone ./
 COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
 COPY --from=builder /app/packages/web/public ./packages/web/public
 
-# Copy the socket server build
+# Copy the socket server build (quizzes persist in SQLite via node:sqlite,
+# a Node built-in — no extra runtime dependency to install)
 COPY --from=builder /app/packages/socket/dist ./packages/socket/dist
-
-# Install firebase-admin for runtime (marked as external in esbuild)
-RUN npm install --no-save firebase-admin
 
 # Copy the combined server
 COPY --from=builder /app/server.js ./server.js
 
-# Copy the game default config
+# Copy the game default config (game.json + quizz/*.json seed files)
 COPY --from=builder /app/config ./config
+
+# Data dir for the SQLite database (normally a bind-mount at runtime)
+RUN mkdir -p /app/data
 
 # Expose single port
 EXPOSE 3000
@@ -67,8 +68,12 @@ EXPOSE 3000
 # Environment variables
 ENV NODE_ENV=production
 ENV CONFIG_PATH=/app/config
+ENV DATA_PATH=/app/data
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+
+# node:sqlite is experimental in Node 22 and requires this flag
+ENV NODE_OPTIONS=--experimental-sqlite
 
 # Start the combined server
 CMD ["node", "server.js"]
