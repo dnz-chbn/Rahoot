@@ -1,7 +1,7 @@
-FROM node:22-alpine AS base
+FROM node:26.12.1-alpine AS base
 
-# Enable and prepare pnpm via Corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install Corepack (no longer bundled with Node since v25), then prepare pnpm
+RUN npm install -g corepack && corepack enable && corepack prepare pnpm@latest --activate
 
 # ----- DEPENDENCIES -----
 FROM base AS deps
@@ -37,7 +37,7 @@ WORKDIR /app/packages/socket
 RUN if [ -f "tsconfig.json" ]; then pnpm build; fi
 
 # ----- RUNNER -----
-FROM node:22-alpine AS runner
+FROM node:26.12.1-alpine AS runner
 WORKDIR /app
 
 # Create a non-root user for better security
@@ -71,9 +71,6 @@ ENV CONFIG_PATH=/app/config
 ENV DATA_PATH=/app/data
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-
-# node:sqlite is experimental in Node 22 and requires this flag
-ENV NODE_OPTIONS=--experimental-sqlite
 
 # Start the combined server
 CMD ["node", "server.js"]
